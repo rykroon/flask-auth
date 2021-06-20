@@ -3,6 +3,23 @@ from flask import request
 from werkzeug.exceptions import BadRequest, Unauthorized
 
 
+"""
+    Parts of Authentication
+
+    Location of the authorization parameter.
+        - headers
+        - body
+        - query parameters
+
+    The name of the parameter.
+    
+    The method of Authorization
+        - Basic
+        - Bearer (Token)
+        - other
+"""
+
+
 class BaseAuthentication:
     scheme = None
     realm = None
