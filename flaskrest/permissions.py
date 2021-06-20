@@ -4,6 +4,13 @@ from flask import g, request
 SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
 
 
+"""
+    Two parts to Authorization.
+        - endpoint permissions
+        - object permissions
+"""
+
+
 class BasePermission:
     def has_permission(self):
         raise NotImplementedError
