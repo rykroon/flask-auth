@@ -1,23 +1,5 @@
-from base64 import b64decode
 from flask import request, g
 from werkzeug.exceptions import BadRequest, Unauthorized
-
-
-"""
-    Parts of Authentication
-
-    Location of the authorization parameter.
-        - headers
-        - body
-        - query parameters
-
-    The name of the parameter.
-    
-    The method of Authorization
-        - Basic
-        - Bearer (Token)
-        - other
-"""
 
 
 class AuthenticationMiddleware:
@@ -43,53 +25,8 @@ class AuthenticationMiddleware:
 
 
 class BaseAuthentication:
-
     def authenticate(self):
         raise NotImplementedError
-
-
-class SchemeAuthentication(BaseAuthentication):
-    scheme = None
-    realm = None
-
-    @property
-    def www_authenticate(self):
-        realm = self.realm or request.host_url
-        return "{} realm={}".format(self.scheme, realm)
-
-    def authenticate(self):
-        authorization_header = request.headers.get('Authorization')
-        if not authorization_header:
-            return None, None
-
-        scheme, _, credentials = authorization_header.partition(' ')
-        if not credentials:
-            raise BadRequest('Invalid Authorization header.')
-
-        if scheme.lower() != self.scheme.lower():
-            return None, None
-
-        return self.validate_credentials(credentials)
-
-    def validate_credentials(self, credentials):
-        raise NotImplementedError
-
-
-class BasicAuthentication(SchemeAuthentication):
-    scheme = 'Basic'
-    
-    def validate_credentials(self, credentials):
-        decoded_credentials = b64decode(credentials)
-        username, _, password = decoded_credentials.partition(':')
-
-        user = self.get_user(username, password)
-        if not user:
-            raise Unauthorized(
-                'Invalid username or password.',
-                www_authenticate=self.www_authenticate
-            )
-
-        return user
         
 
 class AuthCredentials:
@@ -98,8 +35,53 @@ class AuthCredentials:
 
 
 class BaseUser:
-    
+
+    @property
+    def identifier(self):
+        raise NotImplementedError
+
     @property
     def is_authenticated(self):
         raise NotImplementedError
 
+    @property
+    def is_admin(self):
+        raise NotImplementedError
+
+
+class SimpleUser(BaseUser):
+    def __init__(self, identifier):
+        self.identifier = identifier
+
+    @property
+    def identifier(self):
+        return self._identifier
+
+    @identifier.setter
+    def identifier(self, value):
+        self._identifier = value
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_admin(self):
+        return False
+
+
+class UnauthenticatedUser(BaseUser):
+    @property
+    def identifier(self):
+        if request.access_route:
+            return ''.join(request.access_route)
+
+        return request.remote_addr
+
+    @property
+    def is_authenticated(self):
+        return False
+
+    @property
+    def is_admin(self):
+        return False

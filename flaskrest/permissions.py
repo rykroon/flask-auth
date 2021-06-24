@@ -1,34 +1,21 @@
+from functools import wraps
+
 from flask import g, request
+from werkzeug.exceptions import Forbidden
 
 
-SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
+def permission(scopes):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for scope in scopes:
+                if scope not in g.auth.scopes:
+                    raise Forbidden
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
-"""
-    Two parts to Authorization.
-        - endpoint permissions
-        - object permissions
-"""
-
-
-class BasePermission:
-    def has_permission(self):
-        raise NotImplementedError
-
-    def has_object_permission(self, obj):
-        raise NotImplementedError
-
-
-class AllowAny(BasePermission):
-    def has_permission(self):
-        return True
-
-
-class IsAuthneticated(BasePermission):
-    def has_permission(self):
-        return g.user is not None
-
-
-class IsAuthneticatedOrReadOnly(BasePermission):
-    def has_permission(self):
-        return request.method in SAFE_METHODS or g.user is not None
+allow_any = permission('*')
+is_authenticated = permission('is_authenticated')
+is_admin = permission('is_admin')
