@@ -1,21 +1,27 @@
 from functools import wraps
-
-from flask import g, request
+from flask import g
 from werkzeug.exceptions import Forbidden
 
 
-def permission(scopes):
-    def decorator(func):
+class Permission:
+    def __init__(self, *scopes):
+        self.scopes = scopes
+
+    def __call__(self, func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            for scope in scopes:
-                if scope not in g.auth.scopes:
-                    raise Forbidden
+            if not self.has_permission():
+                raise Forbidden
             return func(*args, **kwargs)
         return wrapper
-    return decorator
+
+    def has_permission(self):
+        for scope in self.scopes:
+            if scope not in g.auth.scopes:
+                return False
+        return True
 
 
-allow_any = permission('*')
-is_authenticated = permission('is_authenticated')
-is_admin = permission('is_admin')
+allow_any = Permission()
+is_authenticated = Permission('is_authenticated')
+is_admin = Permission('is_admin')
