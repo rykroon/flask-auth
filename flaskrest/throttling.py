@@ -1,12 +1,15 @@
 from functools import wraps
 import time
+from cachelib import SimpleCache
 from flask import g
 from werkzeug.exceptions import TooManyRequests
 
 
 class Throttle:
+
     def __init__(self, scopes, second=None, minute=None, hour=None, day=None):
         self.scopes = scopes
+        self.cache = SimpleCache()
 
         self.durations = {
             86400: day,
@@ -38,7 +41,7 @@ class Throttle:
             scopes=''.join(self.scopes)
         )
 
-        history = cache.get(cache_key, [])
+        history = self.cache.get(cache_key) or []
         now = time.time()
 
         # "slide" the window based on the max duration
@@ -51,11 +54,11 @@ class Throttle:
             while history and history[end_index] <= now - duration:
                 end_index -= 1
 
-            if len(history[:end_index]) + 1 >= num_requests:
+            if history and len(history[:end_index]) + 1 >= num_requests:
                 return False
 
         history.insert(0, now)
-        cache.set(cache_key, history, max_duration)
+        self.cache.set(cache_key, history, max_duration)
         return True
 
     def retry_after(self):
