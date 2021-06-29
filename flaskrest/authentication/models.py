@@ -22,12 +22,6 @@ class BaseUser:
 
 
 class SimpleUser(BaseUser):
-    def __init__(self, identifier):
-        self._identifier = identifier
-
-    @property
-    def identifier(self):
-        return self._identifier
 
     @property
     def is_authenticated(self):
