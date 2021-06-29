@@ -39,7 +39,7 @@ class BasicAuthentication(SchemeAuthentication):
     scheme = 'basic'
 
     def validate_credentials(self, credentials):
-        decoded_credentials = b64decode(credentials)
+        decoded_credentials = b64decode(credentials).decode()
         username, _, password = decoded_credentials.partition(':')
 
         return self.validate_user(username, password)
