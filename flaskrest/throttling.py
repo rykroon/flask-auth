@@ -7,9 +7,10 @@ from werkzeug.exceptions import TooManyRequests
 
 class Throttle:
 
+    cache = SimpleCache()
+
     def __init__(self, scopes, second=None, minute=None, hour=None, day=None):
         self.scopes = scopes
-        self.cache = SimpleCache()
 
         self.durations = {
             86400: day,
@@ -36,9 +37,9 @@ class Throttle:
             if scope not in g.auth.scopes:
                 return True
 
-        cache_key = 'throttle:{user}:{scopes}'.format(
-            user=g.user.identifier, 
-            scopes=''.join(self.scopes)
+        cache_key = 'throttle:{scopes}:{user}'.format(
+            scopes=''.join(self.scopes),
+            user=g.user.identifier
         )
 
         history = self.cache.get(cache_key) or []
@@ -49,12 +50,12 @@ class Throttle:
         while history and history[-1] <= now - max_duration:
             history.pop()
 
-        for duration, num_requests in self.durations.items():
-            end_index = len(history) - 1
-            while history and history[end_index] <= now - duration:
+        end_index = len(history) - 1
+        for duration, num_requests in self.durations.items():    
+            while end_index >= 0 and history[end_index] <= now - duration:
                 end_index -= 1
 
-            if history and len(history[:end_index]) + 1 >= num_requests:
+            if end_index + 1 >= num_requests:
                 return False
 
         history.insert(0, now)
