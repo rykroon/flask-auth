@@ -8,10 +8,7 @@ class AuthenticationMiddleware:
 
     def __call__(self):
         for auth in self.get_authenticators():
-            try:
-                user_auth_tuple = auth.authenticate()
-            except Exception as e:
-                raise e
+            user_auth_tuple = auth.authenticate()
             
             if user_auth_tuple is not None:
                 g.user, g.auth = user_auth_tuple
