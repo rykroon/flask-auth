@@ -1,11 +1,6 @@
 from flask import request
 
 
-class AuthCredentials:
-    def __init__(self, scopes):
-        self.scopes = scopes
-
-
 class BaseUser:
 
     @property

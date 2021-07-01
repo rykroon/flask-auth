@@ -1,5 +1,5 @@
 from flask import g
-from flaskrest.authentication.models import UnauthenticatedUser, AuthCredentials
+from flaskrest.authentication.models import UnauthenticatedUser
 
 
 class AuthenticationMiddleware:
@@ -8,14 +8,11 @@ class AuthenticationMiddleware:
 
     def __call__(self):
         for auth in self.get_authenticators():
-            user_auth_tuple = auth.authenticate()
-            
-            if user_auth_tuple is not None:
-                g.user, g.auth = user_auth_tuple
+            g.user = auth.authenticate()
+            if g.user is not None:
                 return
 
         g.user = UnauthenticatedUser()
-        g.auth = AuthCredentials(scopes=['*', 'anonymous'])
 
     def get_authenticators(self):
         return [auth() for auth in self.authentication_classes]
