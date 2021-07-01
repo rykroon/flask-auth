@@ -1,27 +1,35 @@
-from functools import wraps
+from functools import update_wrapper
 from flask import g
 from werkzeug.exceptions import Forbidden
 
 
-class Permission:
-    def __init__(self, *scopes):
-        self.scopes = scopes
+class BasePermission:
 
-    def __call__(self, func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if not self.has_permission():
-                raise Forbidden
-            return func(*args, **kwargs)
-        return wrapper
+    def __init__(self, func):
+        update_wrapper(self, func)
+        self.func = func
+    
+    def __call__(self, *args, **kwargs):
+        if not self.has_permission():
+            raise Forbidden
+        return self.func(*args, **kwargs)
 
     def has_permission(self):
-        for scope in self.scopes:
-            if scope not in g.auth.scopes:
-                return False
+        raise NotImplementedError
+
+
+class AllowAny(BasePermission):
+    def has_permission(self):
         return True
 
 
-allow_any = Permission()
-is_authenticated = Permission('is_authenticated')
-is_admin = Permission('is_admin')
+class IsAuthenticated(BasePermission):
+    def has_permission(self):
+        return g.user.is_authenticated
+
+
+class IsAdmin(BasePermission):
+    def has_permission(self):
+        return g.user.is_admin
+
+
