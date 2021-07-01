@@ -1,64 +1,83 @@
-from functools import wraps
+from functools import update_wrapper
 import time
 from cachelib import SimpleCache
 from flask import g
 from werkzeug.exceptions import TooManyRequests
 
 
-class Throttle:
+class SlidingWindow(list):
 
-    cache = SimpleCache()
+    def add_request(self, now=None):
+        now = now or time.time()
+        self.insert(0, now)
 
-    def __init__(self, scopes, second=None, minute=None, hour=None, day=None):
-        self.scopes = scopes
+    def slide_window(self, duration, now=None):
+        now = now or time.time()
+        while self and self[-1] <= now - duration:
+            self.pop()
+
+    def copy(self):
+        return self.__class__(super().copy())
+
+
+class BaseThrottle:
+
+    second = None
+    minute = None
+    hour = None
+    day = None
+
+    def __init__(self, func):
+        update_wrapper(self, func)
+        self.func = func
 
         self.durations = {
-            86400: day,
-            3600: hour,
-            60: minute,
-            1: second
+            86400: self.day,
+            3600: self.hour,
+            60: self.minute,
+            1: self.second
         }
 
         # Remove durations without a specified number of requests
         self.durations = {k: v for k, v in self.durations.items() if v is not None}
 
-    def __call__(self, func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if not self.allow_request():
-                raise TooManyRequests
-            return func(*args, **kwargs)
-        return wrapper
+    def __call__(self, *args, **kwargs):
+        if not self.allow_request():
+            raise TooManyRequests
+        return self.func(*args, **kwargs)
 
     def allow_request(self):
-        # If the scopes do not match then the request
-        # will not be throttled. 
-        for scope in self.scopes:
-            if scope not in g.auth.scopes:
-                return True
+        raise NotImplementedError
 
-        cache_key = 'throttle:{scopes}:{user}'.format(
-            scopes=''.join(self.scopes),
+
+class SimpleThrottle(BaseThrottle):
+
+    cache = SimpleCache()
+
+    def allow_request(self):
+        if not self.durations:
+            return True
+
+        cache_key = 'throttle:{scope}:{user}'.format(
+            scope=self.__class__.__name__,
             user=g.user.identifier
         )
 
-        history = self.cache.get(cache_key) or []
+        history = self.cache.get(cache_key) or SlidingWindow()
         now = time.time()
 
         # "slide" the window based on the max duration
         max_duration = max(self.durations)
-        while history and history[-1] <= now - max_duration:
-            history.pop()
+        history.slide_window(max_duration)
 
-        end_index = len(history) - 1
         for duration, num_requests in self.durations.items():    
-            while end_index >= 0 and history[end_index] <= now - duration:
-                end_index -= 1
+            temp_history = history.copy()
+            temp_history.slide_window(duration, now)
 
-            if end_index + 1 >= num_requests:
+            if len(temp_history) >= num_requests:
                 return False
 
-        history.insert(0, now)
+        history.add_request(now)
         self.cache.set(cache_key, history, max_duration)
         return True
 
@@ -73,4 +92,12 @@ class Throttle:
             return None
 
         return remaining_duration / float(available_requests)
+
+
+class AnonThrottle(SimpleThrottle):
+
+    def allow_request(self):
+        if not g.user.is_authenticated:
+            return super().allow_request()
+        return True
 
