@@ -1,3 +1,3 @@
 from flaskrest.authentication import *
-from flaskrest.permissions import Permission
-from flaskrest.throttling import Throttle
+from flaskrest.permissions import BasePermission, AllowAny, IsAuthenticated, IsAdmin
+from flaskrest.throttling import BaseThrottle, SimpleThrottle, AnonThrottle
