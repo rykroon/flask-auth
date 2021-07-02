@@ -1,6 +1,9 @@
 from functools import update_wrapper
-from flask import g
+from flask import g, request
 from werkzeug.exceptions import Forbidden
+
+
+SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
 
 
 class BasePermission:
@@ -25,11 +28,15 @@ class AllowAny(BasePermission):
 
 class IsAuthenticated(BasePermission):
     def has_permission(self):
-        return g.user.is_authenticated
+        return bool(g.user and g.user.is_authenticated)
 
 
 class IsAdmin(BasePermission):
     def has_permission(self):
-        return g.user.is_admin
+        return bool(g.user and g.user.is_admin)
 
+
+class IsAuthenticatedOrReadOnly(BasePermission):
+    def has_permission(self):
+        return bool(request.method in SAFE_METHODS or g.user and g.user.is_authenticated)
 
