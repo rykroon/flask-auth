@@ -1,3 +1,3 @@
 from flaskrest.authentication.base import BaseAuthentication, BasicAuthentication, SchemeAuthentication
 from flaskrest.authentication.middleware import AuthenticationMiddleware
-from flaskrest.authentication.models import BaseUser, SimpleUser, UnauthenticatedUser, AuthCredentials
+from flaskrest.authentication.models import BaseUser, SimpleUser, UnauthenticatedUser
