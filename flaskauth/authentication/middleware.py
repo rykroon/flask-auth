@@ -1,5 +1,5 @@
 from flask import g
-from flaskrest.authentication.models import UnauthenticatedUser
+from flaskauth.authentication.models import UnauthenticatedUser
 
 
 class AuthenticationMiddleware:

@@ -1,9 +1,9 @@
 from flask import Flask
 from flask.views import MethodView
 
-from flaskrest import AuthenticationMiddleware
-from flaskrest.permissions import AllowAny, IsAuthenticated
-from flaskrest.throttling import SimpleThrottle, AnonThrottle
+from flaskauth import AuthenticationMiddleware
+from flaskauth.permissions import AllowAny, IsAuthenticated
+from flaskauth.throttling import SimpleThrottle, AnonThrottle
 
 app = Flask(__name__)
 
