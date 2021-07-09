@@ -1,3 +1,4 @@
+from cachelib import SimpleCache
 from flask import Flask
 from flask.views import MethodView
 
@@ -15,13 +16,20 @@ def init_middleware():
     auth_mw()
 
 
-SimpleThrottle.minute = 10
-SimpleThrottle.second = 1
+cache = SimpleCache()
+
+class MySimpleThrottle(SimpleThrottle):
+    minute = 10
+    second = 1
+
+    @property
+    def cache(self):
+        return cache
 
 
 @app.route('/', methods=['get'])
 @AllowAny
-@SimpleThrottle
+@MySimpleThrottle
 def root():
     return "OK"
 
