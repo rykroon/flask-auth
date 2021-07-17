@@ -1,4 +1,4 @@
-from functools import update_wrapper
+from functools import wraps
 import time
 from flask import g
 from werkzeug.exceptions import TooManyRequests
@@ -19,34 +19,38 @@ class SlidingWindow(list):
         return self.__class__(super().copy())
 
 
+def rate_limit(throttle_class, **throttle_kwargs):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            throttle = throttle_class(**throttle_kwargs)
+            if not throttle.allow_request():
+                raise TooManyRequests(retry_after=throttle.retry_after())
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 class BaseThrottle:
 
-    second = None
-    minute = None
-    hour = None
-    day = None
+    scope = None
 
-    def __init__(self, func):
-        update_wrapper(self, func)
-        self.func = func
-
+    def __init__(self, second=None, minute=None, hour=None, day=None):
+        
         self.durations = {
-            86400: self.day,
-            3600: self.hour,
-            60: self.minute,
-            1: self.second
+            86400: day,
+            3600: hour,
+            60: minute,
+            1: second
         }
 
         # Remove durations without a specified number of requests
         self.durations = {k: v for k, v in self.durations.items() if v is not None}
 
-    def __call__(self, *args, **kwargs):
-        allowed, retry_after = self.allow_request()
-        if not allowed:
-            raise TooManyRequests(retry_after=retry_after)
-        return self.func(*args, **kwargs)
-
     def allow_request(self):
+        raise NotImplementedError
+
+    def retry_after(self):
         raise NotImplementedError
 
 
@@ -61,35 +65,37 @@ class SimpleThrottle(BaseThrottle):
             Returns a 2-tuple of (allow, retry_after)
         """
         if not self.durations:
-            return True, None
+            return True
 
         cache_key = 'throttle:{scope}:{user}'.format(
-            scope=self.__class__.__name__,
+            scope=self.scope,
             user=g.user.identifier
         )
 
-        history = self.cache.get(cache_key) or SlidingWindow()
-        now = time.time()
+        self.history = self.cache.get(cache_key) or SlidingWindow()
+        self.now = time.time()
 
         # "slide" the window based on the max duration
         max_duration = max(self.durations)
-        history.slide_window(max_duration)
+        self.history.slide_window(max_duration)
 
         for duration, num_requests in self.durations.items():    
-            temp_history = history.copy()
-            temp_history.slide_window(duration, now)
+            temp_history = self.history.copy()
+            temp_history.slide_window(duration, self.now)
 
             if len(temp_history) >= num_requests:
-                if temp_history:
-                    remaining_duration = duration - (now - temp_history[-1])
-                else:
-                    remaining_duration = duration
+                self.throttled_history = temp_history
+                self.throttled_duration = duration
+                return False
 
-                return False, remaining_duration
+        self.history.add_request(self.now)
+        self.cache.set(cache_key, self.history, max_duration)
+        return True
 
-        history.add_request(now)
-        self.cache.set(cache_key, history, max_duration)
-        return True, None
+    def retry_after(self):
+        if self.throttled_history:
+            return self.throttled_duration - (self.now - self.throttled_history[-1])
+        return self.throttled_duration
 
 
 class AnonThrottle(SimpleThrottle):
