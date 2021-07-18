@@ -3,7 +3,7 @@ from flask import Flask
 from flask.views import MethodView
 
 from flaskauth import AuthenticationMiddleware
-from flaskauth.permissions import AllowAny
+from flaskauth.permissions import allow_any
 from flaskauth.throttling import SimpleThrottle, rate_limit
 
 app = Flask(__name__)
@@ -26,7 +26,7 @@ class MySimpleThrottle(SimpleThrottle):
 
 
 @app.route('/', methods=['get'])
-@AllowAny
+@allow_any
 @rate_limit(MySimpleThrottle, minute=10, second=1)
 def root():
     return "OK"
