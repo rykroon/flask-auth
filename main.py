@@ -4,7 +4,7 @@ from flask.views import MethodView
 
 from flaskauth import AuthenticationMiddleware
 from flaskauth.permissions import allow_any
-from flaskauth.throttling import SimpleThrottle, rate_limit
+from flaskauth.throttling import SimpleThrottle, throttle
 
 app = Flask(__name__)
 
@@ -27,7 +27,7 @@ class MySimpleThrottle(SimpleThrottle):
 
 @app.route('/', methods=['get'])
 @allow_any
-@rate_limit(MySimpleThrottle, minute=10, second=1)
+@throttle(MySimpleThrottle, minute=10, second=1)
 def root():
     return "OK"
 

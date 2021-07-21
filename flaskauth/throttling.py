@@ -19,7 +19,7 @@ class SlidingWindow(list):
         return self.__class__(super().copy())
 
 
-def rate_limit(throttle_class, **throttle_kwargs):
+def throttle(throttle_class, **throttle_kwargs):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -60,16 +60,16 @@ class SimpleThrottle(BaseThrottle):
     def cache(self):
         raise NotImplementedError
 
+    def get_identifier(self):
+        return g.user.identifier
+
     def allow_request(self):
-        """
-            Returns a 2-tuple of (allow, retry_after)
-        """
         if not self.durations:
             return True
 
-        cache_key = 'throttle:{scope}:{user}'.format(
+        cache_key = 'throttle:{scope}:{identifier}'.format(
             scope=self.scope,
-            user=g.user.identifier
+            identifier=self.get_identifier()
         )
 
         self.history = self.cache.get(cache_key) or SlidingWindow()
