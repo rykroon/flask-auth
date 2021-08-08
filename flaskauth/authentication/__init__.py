@@ -1,3 +1,3 @@
-from flaskauth.authentication.base import BaseAuthentication, BasicAuthentication, SchemeAuthentication
+from flaskauth.authentication.backends import AuthenticationBackend, BasicAuthentication, SchemeAuthentication
 from flaskauth.authentication.middleware import AuthenticationMiddleware
 from flaskauth.authentication.models import BaseUser, SimpleUser, UnauthenticatedUser

@@ -2,7 +2,7 @@ from base64 import b64decode
 from flask import request
 
 
-class BaseAuthentication:
+class AuthenticationBackend:
     @property
     def www_authenticate(self):
         raise NotImplementedError
@@ -11,7 +11,7 @@ class BaseAuthentication:
         raise NotImplementedError
 
 
-class SchemeAuthentication(BaseAuthentication):
+class SchemeAuthentication(AuthenticationBackend):
     scheme = None
     realm = None
 
