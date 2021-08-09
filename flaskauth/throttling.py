@@ -100,6 +100,8 @@ class SimpleThrottle(BaseThrottle):
 
 class AnonThrottle(SimpleThrottle):
 
+    scope = 'anon'
+
     def allow_request(self):
         if not g.user.is_authenticated:
             return super().allow_request()
