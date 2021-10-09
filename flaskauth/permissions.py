@@ -9,7 +9,7 @@ SAFE_METHODS = ('GET', 'HEAD', 'OPTIONS')
 def permission(permission_class, **permission_kwargs):
     def decorator(func):
         @wraps(func)
-        def wrapper(args, **kwargs):
+        def wrapper(*args, **kwargs):
             perm = permission_class(**permission_kwargs)
             if not perm.has_permission():
                 raise Forbidden

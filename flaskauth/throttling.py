@@ -1,31 +1,45 @@
 from functools import wraps
 import time
-from flask import g
+from flask import g, request
 from werkzeug.exceptions import TooManyRequests
 
 
 class SlidingWindow(list):
 
-    def add_request(self, now=None):
-        now = now or time.time()
+    def add_request(self, now):
         self.insert(0, now)
 
-    def slide_window(self, duration, now=None):
-        now = now or time.time()
+    def slide_window(self, duration, now):
         while self and self[-1] <= now - duration:
             self.pop()
 
-    def copy(self):
-        return self.__class__(super().copy())
 
-
-def throttle(throttle_class, **throttle_kwargs):
+def throttle(throttle_class, seconds=None, minutes=None, hours=None, days=None):
+    """
+        throttle_kwargs can be:
+            - seconds
+            - minutes
+            - hours
+            - days
+        The value is the number of requests
+    """
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            throttle = throttle_class(**throttle_kwargs)
-            if not throttle.allow_request():
-                raise TooManyRequests(retry_after=throttle.retry_after())
+            durations = {
+                'seconds': seconds,
+                'minutes': minutes,
+                'hours': hours,
+                'days': days
+            }
+
+            for period, num in durations.items():
+                if not num:
+                    continue
+                rate = '{}/{}'.format(num, period)
+                throttle = throttle_class(rate)
+                if not throttle.allow_request():
+                    raise TooManyRequests(retry_after=throttle.retry_after())
             return func(*args, **kwargs)
         return wrapper
     return decorator
@@ -35,17 +49,10 @@ class BaseThrottle:
 
     scope = None
 
-    def __init__(self, second=None, minute=None, hour=None, day=None):
-        
-        self.durations = {
-            86400: day,
-            3600: hour,
-            60: minute,
-            1: second
-        }
-
-        # Remove durations without a specified number of requests
-        self.durations = {k: v for k, v in self.durations.items() if v is not None}
+    def __init__(self, rate):
+        num, period = rate.split('/')
+        self.num_requests = int(num)
+        self.duration = {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[period[0]]
 
     def allow_request(self):
         raise NotImplementedError
@@ -64,38 +71,31 @@ class SimpleThrottle(BaseThrottle):
         return g.user.identifier
 
     def allow_request(self):
-        if not self.durations:
-            return True
 
-        cache_key = 'throttle:{scope}:{identifier}'.format(
+        cache_key = 'throttle:{path}:{scope}:{ident}{duration}'.format(
+            path=request.path,
             scope=self.scope,
-            identifier=self.get_identifier()
+            ident=self.get_identifier(),
+            duration=self.duration
         )
 
         self.history = self.cache.get(cache_key) or SlidingWindow()
         self.now = time.time()
 
         # "slide" the window based on the max duration
-        max_duration = max(self.durations)
-        self.history.slide_window(max_duration)
+        self.history.slide_window(self.duration, self.now)
 
-        for duration, num_requests in self.durations.items():    
-            temp_history = self.history.copy()
-            temp_history.slide_window(duration, self.now)
-
-            if len(temp_history) >= num_requests:
-                self.throttled_history = temp_history
-                self.throttled_duration = duration
-                return False
+        if len(self.history) >= self.num_requests:
+            return False
 
         self.history.add_request(self.now)
-        self.cache.set(cache_key, self.history, max_duration)
+        self.cache.set(cache_key, self.history, self.duration)
         return True
 
     def retry_after(self):
-        if self.throttled_history:
-            return self.throttled_duration - (self.now - self.throttled_history[-1])
-        return self.throttled_duration
+        if self.history:
+            return self.duration - (self.now - self.history[-1])
+        return self.duration
 
 
 class AnonThrottle(SimpleThrottle):
