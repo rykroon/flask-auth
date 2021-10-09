@@ -15,28 +15,20 @@ class SlidingWindow(list):
 
 
 def throttle(throttle_class, seconds=None, minutes=None, hours=None, days=None):
-    """
-        throttle_kwargs can be:
-            - seconds
-            - minutes
-            - hours
-            - days
-        The value is the number of requests
-    """
+    durations = {
+        'seconds': seconds,
+        'minutes': minutes,
+        'hours': hours,
+        'days': days
+    }
+
+    durations = {k: v for k, v in durations.items() if v is not None}
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            durations = {
-                'seconds': seconds,
-                'minutes': minutes,
-                'hours': hours,
-                'days': days
-            }
-
             for period, num in durations.items():
-                if not num:
-                    continue
-                rate = '{}/{}'.format(num, period)
+                rate = '{}/{}'.format(num, period[0])
                 throttle = throttle_class(rate)
                 if not throttle.allow_request():
                     raise TooManyRequests(retry_after=throttle.retry_after())
