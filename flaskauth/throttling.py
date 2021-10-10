@@ -1,35 +1,35 @@
 from functools import wraps
 import time
+from cachelib import NullCache
 from flask import g, request
 from werkzeug.exceptions import TooManyRequests
 
 
 class SlidingWindow(list):
 
-    def add_request(self, now):
-        self.insert(0, now)
+    def add_request(self, timestamp):
+        self.insert(0, timestamp)
 
-    def slide_window(self, duration, now):
-        while self and self[-1] <= now - duration:
+    def slide_window(self, duration, timestamp):
+        while self and self[-1] <= timestamp - duration:
             self.pop()
 
 
-def throttle(throttle_class, seconds=None, minutes=None, hours=None, days=None):
-    durations = {
-        'seconds': seconds,
-        'minutes': minutes,
-        'hours': hours,
-        'days': days
-    }
+def throttle(throttle_class, second=None, minute=None, hour=None, day=None):
+    durations = [
+        (second, 1),
+        (minute, 60),
+        (hour, 3600),
+        (day, 86400)
+    ]
 
-    durations = {k: v for k, v in durations.items() if v is not None}
+    durations = [(x, y) for x, y in durations if x is not None]
 
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            for period, num in durations.items():
-                rate = '{}/{}'.format(num, period[0])
-                throttle = throttle_class(rate)
+            for num, duration in durations:
+                throttle = throttle_class(num, duration)
                 if not throttle.allow_request():
                     raise TooManyRequests(retry_after=throttle.retry_after())
             return func(*args, **kwargs)
@@ -41,10 +41,9 @@ class BaseThrottle:
 
     scope = None
 
-    def __init__(self, rate):
-        num, period = rate.split('/')
-        self.num_requests = int(num)
-        self.duration = {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[period[0]]
+    def __init__(self, num_of_requests, duration):
+        self.num_requests = num_of_requests
+        self.duration = duration
 
     def allow_request(self):
         raise NotImplementedError
@@ -55,9 +54,7 @@ class BaseThrottle:
 
 class SimpleThrottle(BaseThrottle):
 
-    @property
-    def cache(self):
-        raise NotImplementedError
+    cache = NullCache()
 
     def get_identifier(self):
         return g.user.identifier
@@ -65,10 +62,10 @@ class SimpleThrottle(BaseThrottle):
     def allow_request(self):
 
         cache_key = 'throttle:{path}:{scope}:{ident}{duration}'.format(
-            path=request.path,
-            scope=self.scope,
-            ident=self.get_identifier(),
-            duration=self.duration
+            path=request.path, # where
+            scope=self.scope, # what
+            ident=self.get_identifier(), # who
+            duration=self.duration # which
         )
 
         self.history = self.cache.get(cache_key) or SlidingWindow()
