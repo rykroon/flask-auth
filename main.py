@@ -27,7 +27,7 @@ class MySimpleThrottle(SimpleThrottle):
 
 @app.route('/', methods=['get'])
 @allow_any
-@throttle(MySimpleThrottle, hour=36, minute=6, second=1)
+@throttle(MySimpleThrottle, per_hr=9, per_min=3, per_sec=1)
 def root():
     return "OK"
 
