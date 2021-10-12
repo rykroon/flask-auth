@@ -15,23 +15,25 @@ class SlidingWindow(list):
             self.pop()
 
 
-def throttle(throttle_class, second=None, minute=None, hour=None, day=None):
-    durations = [
-        (second, 1),
-        (minute, 60),
-        (hour, 3600),
-        (day, 86400)
+def throttle(throttle_class, per_sec=None, per_min=None, per_hr=None, per_day=None):
+    rates = [
+        (per_sec, 1),
+        (per_min, 60),
+        (per_hr, 3600),
+        (per_day, 86400)
     ]
-
-    durations = [(x, y) for x, y in durations if x is not None]
 
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            for num, duration in durations:
-                throttle = throttle_class(num, duration)
+            for num_of_requests, duration in rates:
+                if num_of_requests is None:
+                    continue
+
+                throttle = throttle_class(num_of_requests, duration)
                 if not throttle.allow_request():
                     raise TooManyRequests(retry_after=throttle.retry_after())
+
             return func(*args, **kwargs)
         return wrapper
     return decorator
