@@ -73,7 +73,7 @@ class SimpleThrottle(BaseThrottle):
         self.history = self.cache.get(cache_key) or SlidingWindow()
         self.now = time.time()
 
-        # "slide" the window based on the max duration
+        # "slide" the window based on the duration
         self.history.slide_window(self.duration, self.now)
 
         if len(self.history) >= self.num_requests:
