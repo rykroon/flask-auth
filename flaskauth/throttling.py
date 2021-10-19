@@ -2,20 +2,24 @@ from functools import wraps
 import time
 from cachelib import NullCache
 from flask import g, request
+from werkzeug.utils import cached_property
 from werkzeug.exceptions import TooManyRequests
 
 
 class SlidingWindow(list):
 
+    def __init__(self, duration):
+        self.duration = duration
+
     def add_request(self, timestamp):
         self.insert(0, timestamp)
 
-    def slide_window(self, duration, timestamp):
-        while self and self[-1] <= timestamp - duration:
+    def slide_window(self, timestamp):
+        while self and self[-1] <= timestamp - self.duration:
             self.pop()
 
 
-def throttle(throttle_class, per_sec=None, per_min=None, per_hr=None, per_day=None):
+def throttle(throttle_class, per_sec=None, per_min=None, per_hr=None, per_day=None, block_time=None):
     rates = [
         (per_sec, 1),
         (per_min, 60),
@@ -30,7 +34,7 @@ def throttle(throttle_class, per_sec=None, per_min=None, per_hr=None, per_day=No
                 if num_of_requests is None:
                     continue
 
-                throttle = throttle_class(num_of_requests, duration)
+                throttle = throttle_class(num_of_requests, duration, block_time=block_time)
                 if not throttle.allow_request():
                     raise TooManyRequests(retry_after=throttle.retry_after())
 
@@ -41,12 +45,6 @@ def throttle(throttle_class, per_sec=None, per_min=None, per_hr=None, per_day=No
 
 class BaseThrottle:
 
-    scope = None
-
-    def __init__(self, num_of_requests, duration):
-        self.num_requests = num_of_requests
-        self.duration = duration
-
     def allow_request(self):
         raise NotImplementedError
 
@@ -54,47 +52,85 @@ class BaseThrottle:
         raise NotImplementedError
 
 
-class SimpleThrottle(BaseThrottle):
+class SimpleThrottle:
 
     cache = NullCache()
+    scope = 'default'
 
-    def get_identifier(self):
+    def __init__(self, num_of_requests, duration, block_time=None):
+        self.num_requests = num_of_requests
+        self.duration = duration
+        self.block_time = block_time
+
+    @cached_property
+    def user(self):
         return g.user.identifier
 
     def allow_request(self):
+        if self.is_blocking():
+            return False
 
-        cache_key = 'throttle:{path}:{scope}:{ident}{duration}'.format(
-            path=request.path, # where
-            scope=self.scope, # what
-            ident=self.get_identifier(), # who
-            duration=self.duration # which
-        )
-
-        self.history = self.cache.get(cache_key) or SlidingWindow()
+        cache_key = f'{request.path}:{self.user}:{self.duration}'
+        self.history = self.cache.get(cache_key) or SlidingWindow(self.duration)
         self.now = time.time()
-
-        # "slide" the window based on the duration
-        self.history.slide_window(self.duration, self.now)
+        self.history.slide_window(self.now)
 
         if len(self.history) >= self.num_requests:
+            self.set_block_time()
             return False
 
         self.history.add_request(self.now)
         self.cache.set(cache_key, self.history, self.duration)
         return True
 
+    def set_block_time(self):
+        if self.block_time:
+            self.cache.set(f"blocking:{self.user}", 1, self.block_time)
+
+    def remaining_block_time(self):
+        return self.cache._client.ttl(f"blocking:{self.user}")
+
+    def is_blocking(self):
+        return self.remaining_block_time() > 0
+
     def retry_after(self):
+        block_time = self.remaining_block_time()
+        if block_time > 0:
+            return block_time
+        
         if self.history:
             return self.duration - (self.now - self.history[-1])
         return self.duration
 
 
 class AnonThrottle(SimpleThrottle):
-
     scope = 'anon'
 
     def allow_request(self):
-        if not g.user.is_authenticated:
-            return super().allow_request()
-        return True
+        if g.user.is_authenticated:
+            return True
+
+        return super().allow_request()
+
+
+class UserThrottle(SimpleThrottle):
+    scope = 'user'
+
+    def allow_request(self):
+        if not self.user.is_authenticated:
+            return True
+
+        if not self.user.is_admin:
+            return True
+        
+        return super().allow_request()
+
+
+class AdminThrottle(SimpleThrottle):
+    scope = 'admin'
+
+    def allow_request(self):
+        if not g.is_admin:
+            return True
+        return super().allow_request()
 
