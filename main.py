@@ -1,4 +1,4 @@
-from cachelib import SimpleCache
+from cachelib import SimpleCache, RedisCache
 from flask import Flask
 from flask.views import MethodView
 
@@ -16,7 +16,7 @@ def init_middleware():
     auth_mw()
 
 
-cache = SimpleCache()
+cache = RedisCache()
 
 class MySimpleThrottle(SimpleThrottle):
 
@@ -27,7 +27,7 @@ class MySimpleThrottle(SimpleThrottle):
 
 @app.route('/', methods=['get'])
 @allow_any
-@throttle(MySimpleThrottle, per_hr=9, per_min=3, per_sec=1)
+@throttle(MySimpleThrottle, block_time=3600, per_hr=9, per_min=3, per_sec=1)
 def root():
     return "OK"
 
